@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phishing Simulation Tool</title>
+  <style>
+    :root{
+      --bg:#f5f6f7;
+      --panel:#ffffff;
+      --muted:#6b7280;
+      --text:#111827;
+      --accent:#0ea5e9;
+      --border:#e5e7eb;
+      --radius:14px;
+      --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    a{color:inherit;text-decoration:none}
+    .app{
+      display:grid;
+      grid-template-columns: 260px 1fr;
+      min-height:100vh;
+      transition: grid-template-columns .2s ease;
+    }
+    /* Sidebar */
+    .sidebar{
+      background:#fafafa;
+      border-right:1px solid var(--border);
+      padding:18px 12px;
+      position:sticky; top:0; height:100vh;
+      display:flex; flex-direction:column; gap:10px;
+      transition: padding .2s ease;
+    }
+    .brand{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px}
+    .brand h1{font-size:16px;margin:0;font-weight:700; white-space:nowrap}
+    .nav{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+    .nav button{
+      width:100%; text-align:left; border:0; background:transparent;
+      padding:10px 12px; border-radius:10px; display:flex; align-items:center; gap:10px;
+      cursor:pointer; color:#111;
+    }
+    .nav button:hover{background:#f0f2f4}
+    .nav button.active{background:#e6f4ff; color:#0b6abf}
+    .logout{margin-top:auto}
+    .icon{width:18px;height:18px;display:inline-block}
+    /* Header */
+    .header{
+      padding:20px 22px 0 22px;
+    }
+    .titlebar{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .titlebar h2{margin:0;font-size:28px;letter-spacing:.2px}
+    /* Content panels */
+    .panel{
+      margin:16px 22px 28px 22px;
+      background:var(--panel); border:1px solid var(--border);
+      border-radius:var(--radius); box-shadow:var(--shadow);
+      padding:18px;
+    }
+    .grid{
+      display:grid; gap:16px;
+      grid-template-columns: 1.1fr 2fr;
+    }
+    .card{
+      border:1px solid var(--border); border-radius:12px; padding:14px; background:#fff;
+    }
+    .muted{color:var(--muted)}
+    .score{
+      font-size:52px; font-weight:800; margin:8px 0 0;
+      letter-spacing:1px;
+    }
+    .btn{
+      display:inline-flex; align-items:center; gap:8px;
+      border:1px solid var(--border); background:#fff; border-radius:10px;
+      padding:10px 12px; cursor:pointer;
+    }
+    .btn:hover{background:#f8fafc}
+    .btn.primary{border-color:#cde8ff; background:#e9f5ff}
+    .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .right{margin-left:auto}
+    select{border:1px solid var(--border); border-radius:10px; padding:8px 10px; background:#fff}
+    /* Table */
+    table{width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:12px; border:1px solid var(--border); background:#fff}
+    thead th{font-weight:600; text-align:left; padding:12px; border-bottom:1px solid var(--border); background:#fafafa}
+    tbody td{padding:12px; border-bottom:1px solid var(--border)}
+    tbody tr:last-child td{border-bottom:0}
+    /* Views hidden/shown */
+    [data-view]{display:none}
+    [data-view].active{display:block}
+    /* Mobile */
+    .topbar{
+      display:none; position:sticky; top:0; background:#fff; border-bottom:1px solid var(--border); padding:10px 12px; z-index:5;
+    }
+    .hamburger{display:flex; align-items:center; gap:8px; cursor:pointer}
+    @media (max-width: 900px){
+      .app{grid-template-columns: 1fr}
+      .sidebar{position:fixed; inset:0 auto 0 0; width:260px; transform:translateX(-100%); transition:.2s; z-index:10}
+      .sidebar.open{transform:translateX(0)}
+      .topbar{display:flex; justify-content:space-between; align-items:center}
+      .header{padding:66px 16px 0}
+      .panel{margin:14px 16px 24px}
+      .grid{grid-template-columns:1fr}
+    }
+    @media print{
+      .sidebar,.topbar,.controls .btn,.controls select{display:none!important}
+      .panel{box-shadow:none;border:0;margin:0;padding:0}
+      body{background:#fff}
+    }
+
+    /* === Collapsible sidebar (desktop) === */
+    .app.collapsed{ grid-template-columns: 64px 1fr; }
+    .sidebar.collapsed{ padding:18px 8px; }
+    .sidebar.collapsed .brand h1{ display:none; }
+    .sidebar.collapsed .nav button{ justify-content:center; }
+    .sidebar.collapsed .nav .label{ display:none; }
+  </style>
+</head>
+<body>
+  <!-- Mobile top bar -->
+  <div class="topbar">
+    <div class="hamburger" id="menuBtn" aria-label="Open menu" role="button" tabindex="0">
+      <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <strong>Phishing Tool</strong>
+    </div>
+    <div class="muted">Wireframe</div>
+  </div>
+
+  <div class="app" id="appRoot">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <div class="brand">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+          <path d="M7 14c2 2 8 2 10-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h1>Phishing Tool</h1>
+      </div>
+      <nav class="nav">
+        <button class="active" data-nav="dashboard">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M3 10l9-7 9 7v9a2 2 0 0 1-2 2h-4V12H9v9H5a2 2 0 0 1-2-2v-9z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <span class="label">Dashboard</span>
+        </button>
+        <button data-nav="accounts">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm7 9a7 7 0 0 0-14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="label">Accounts</span>
+        </button>
+        <button data-nav="phishing">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 2v8m0 0c4 0 7 3 7 7s-3 5-7 5-7-1-7-5 3-7 7-7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="label">Phishing</span>
+        </button>
+        <button data-nav="statistics">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="label">Statistics</span>
+        </button>
+        <button data-nav="settings">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-4 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1 0-4h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 4 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a2 2 0 0 1 0 4h-.2a1 1 0 0 0-.9.6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="label">Settings</span>
+        </button>
+        <button class="logout" data-nav="logout">
+          <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M15 17l5-5-5-5M20 12H9M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="label">Logout</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main>
+      <header class="header">
+        <div class="titlebar">
+          <h2 id="viewTitle">Dashboard</h2>
+          <div class="controls">
+            <select id="rangeSelect" aria-label="Select date range">
+              <option>Last 7 days</option>
+              <option selected>Last 30 days</option>
+              <option>Last 90 days</option>
+            </select>
+            <!-- Collapse toggle (desktop) -->
+            <button class="btn" id="btnCollapse" title="Toggle sidebar width" aria-pressed="false">
+              <svg class="icon" viewBox="0 0 24 24" fill="none"><path d="M8 5l-5 7 5 7M16 5l5 7-5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Collapse
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dashboard -->
+      <section class="panel active" data-view="dashboard">
+        <div class="grid">
+          <div class="card">
+            <h4>Total Phishing Attempts</h4>
+            <div class="score" id="totalAttempts">0</div>
+          </div>
+          <div class="card">
+            <h4>Total Clicks</h4>
+            <div class="score" id="totalClicks">0</div>
+          </div>
+          <div class="card">
+            <h4>Click Rate</h4>
+            <div class="score" id="clickRate">0%</div>
+          </div>
+          <div class="card">
+            <h4>Vulnerability Score</h4>
+            <div class="score" id="vulnScore" aria-live="polite">0%</div>
+            <div class="muted" id="vulnLabel">Low risk</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <canvas id="overviewChart" height="120" aria-label="Attack history chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Accounts View -->
+      <section class="panel" data-view="accounts">
+        <h3 style="margin-top:0">Accounts (Admin)</h3>
+        <p class="muted">Manage users, roles, and groups. (Wireframe placeholder)</p>
+        <div class="card">
+          <ul>
+            <li>Bulk upload users (CSV)</li>
+            <li>Create roles: Admin, Trainer, Viewer</li>
+            <li>Reset password, deactivate/reactivate accounts</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Phishing Educational View -->
+      <section class="panel" data-view="phishing">
+        <h3 style="margin-top:0">Understanding Phishing Attacks</h3>
+        <div class="card">
+          <p><strong>Phishing</strong> is a deceptive cyberattack where criminals pose as trusted entities (banks, colleagues, HR, cloud services) to trick people into revealing sensitive data such as passwords, credit card numbers, or personal information.</p>
+          <h4>Common Types of Phishing</h4>
+          <ul>
+            <li><strong>Email phishing:</strong> Mass emails imitating legitimate brands or services.</li>
+            <li><strong>Spear phishing:</strong> Targeted messages tailored to an individual or team.</li>
+            <li><strong>Smishing:</strong> Fraudulent SMS/text messages with malicious links.</li>
+            <li><strong>Vishing:</strong> Phone calls impersonating help desks or banks.</li>
+            <li><strong>Clone phishing:</strong> Real email copied and resent with a malicious link/attachment.</li>
+            <li><strong>Business Email Compromise (BEC):</strong> Impersonation of executives or vendors to request payments or data.</li>
+          </ul>
+          <h4>How It Works</h4>
+          <p>Attackers exploit urgency (e.g., “account locked”, “invoice overdue”), curiosity, or authority to make you click a link, open an attachment, or enter credentials on a fake site that looks legitimate.</p>
+          <h4>Potential Harms</h4>
+          <ul>
+            <li>Financial loss (fraudulent transfers, gift cards, stolen card details)</li>
+            <li>Identity theft and long-term account takeover</li>
+            <li>Malware/ransomware infections and data breaches</li>
+            <li>Reputational damage for individuals and organizations</li>
+          </ul>
+          <h4>How to Protect Yourself</h4>
+          <ul>
+            <li>Hover over links to inspect the real URL before clicking.</li>
+            <li>Verify unexpected requests via a separate channel (call the sender).</li>
+            <li>Use multi-factor authentication (MFA) on important accounts.</li>
+            <li>Keep browsers and antivirus up to date; report suspicious emails.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Statistics View -->
+      <section class="panel" data-view="statistics">
+        <h3>Phishing Statistics</h3>
+        <div class="card">
+          <canvas id="barChart" height="150"></canvas>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <canvas id="pieChart" height="150"></canvas>
+        </div>
+      </section>
+
+      <!-- Settings View -->
+      <section class="panel" data-view="settings">
+        <h3 style="margin-top:0">Settings</h3>
+        <div class="card">
+          <p><strong>Username</strong></p>
+          <input type="text" id="fixedUsername" value="user@example.com" style="padding:10px;border-radius:10px;border:1px solid var(--border)" disabled>
+          <p class="muted" style="margin-top:10px">Username is fixed by admin.</p>
+
+          <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+
+          <p><strong>Change Password</strong></p>
+          <form id="changePasswordForm" onsubmit="event.preventDefault()">
+            <input type="password" id="currentPass" placeholder="Current password" style="padding:10px;border-radius:10px;border:1px solid var(--border);width:100%;margin-bottom:8px">
+            <input type="password" id="newPass" placeholder="New password" style="padding:10px;border-radius:10px;border:1px solid var(--border);width:100%;margin-bottom:8px">
+            <input type="password" id="confirmPass" placeholder="Confirm new password" style="padding:10px;border-radius:10px;border:1px solid var(--border);width:100%;margin-bottom:8px">
+            <button class="btn">Update</button>
+          </form>
+          <p class="muted" style="margin-top:10px">Demo only: stored in your browser (localStorage).</p>
+        </div>
+      </section>
+
+      <!-- Logout View -->
+      <section class="panel" data-view="logout">
+        <h3 style="margin-top:0">Logout</h3>
+        <p class="muted">This is a placeholder. In production, this would end the session and redirect to the login page.</p>
+        <button class="btn">Log out</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // ===== Centralized data =====
+    const phishingStats = {
+      totalAttempts: 12,
+      totalClicks: 5,
+      monthlyAttempts: [2, 1, 3, 2, 1, 3], // used by overview chart
+      clickDistribution: { clicked: 9, avoided: 12 }, // pie chart
+      perUserClicks: { labels: ['user1','user2','user3','user4'], values: [3,1,5,0] } // bar chart
+    };
+
+    // ===== Sidebar toggle (mobile) =====
+    const sidebar = document.getElementById('sidebar');
+    const appRoot = document.getElementById('appRoot');
+    const menuBtn = document.getElementById('menuBtn');
+    const toggleSidebarMobile = () => sidebar.classList.toggle('open');
+    if(menuBtn){
+      menuBtn.addEventListener('click', toggleSidebarMobile);
+      menuBtn.addEventListener('keypress', (e)=>{ if(e.key==='Enter') toggleSidebarMobile(); });
+    }
+
+    // ===== Collapsible sidebar (desktop) =====
+    const collapseBtn = document.getElementById('btnCollapse');
+    collapseBtn.addEventListener('click', ()=>{
+      const collapsed = appRoot.classList.toggle('collapsed');
+      sidebar.classList.toggle('collapsed', collapsed);
+      collapseBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    });
+
+    // ===== Simple SPA view switching =====
+    const navButtons = document.querySelectorAll('.nav button');
+    const views = document.querySelectorAll('[data-view]');
+    const title = document.getElementById('viewTitle');
+
+    navButtons.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        navButtons.forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const view = btn.getAttribute('data-nav');
+        views.forEach(v=>v.classList.toggle('active', v.getAttribute('data-view')===view));
+        title.textContent = btn.textContent.trim();
+        sidebar.classList.remove('open'); // close on mobile
+      });
+    });
+
+    // ===== Dashboard metrics (dynamic) =====
+    const totalAttemptsEl = document.getElementById('totalAttempts');
+    const totalClicksEl = document.getElementById('totalClicks');
+    const clickRateEl = document.getElementById('clickRate');
+    const vulnScoreEl = document.getElementById('vulnScore');
+    const vulnLabelEl = document.getElementById('vulnLabel');
+
+    function updateDashboard(){
+      const attempts = phishingStats.totalAttempts;
+      const clicks = phishingStats.totalClicks;
+      const clickRate = attempts ? Math.round((clicks/attempts)*100) : 0;
+      const vulnScore = clickRate; // using same formula for now
+
+      totalAttemptsEl.textContent = attempts;
+      totalClicksEl.textContent = clicks;
+      clickRateEl.textContent = clickRate + '%';
+
+      vulnScoreEl.textContent = vulnScore + '%';
+      // color & label
+      let color = '#22c55e', label='Low risk';
+      if(vulnScore > 60){ color='#ef4444'; label='High risk'; }
+      else if(vulnScore > 30){ color='#f59e0b'; label='Medium risk'; }
+      vulnScoreEl.style.color = color;
+      vulnLabelEl.textContent = label;
+    }
+    updateDashboard();
+
+    // ===== Charts =====
+    // Overview chart
+    new Chart(document.getElementById('overviewChart'), {
+      type: 'line',
+      data: {
+        labels: ['Jan','Feb','Mar','Apr','May','Jun'].slice(0, phishingStats.monthlyAttempts.length),
+        datasets: [{
+          label: 'Phishing Attempts',
+          data: phishingStats.monthlyAttempts,
+          borderColor: '#0ea5e9',
+          fill: false,
+          tension: 0.1
+        }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false }
+    });
+
+    // Bar chart (per-user clicks)
+    new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: phishingStats.perUserClicks.labels,
+        datasets: [{
+          label: 'Times Phished',
+          data: phishingStats.perUserClicks.values,
+          backgroundColor: '#0ea5e9'
+        }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false }
+    });
+
+    // Pie chart (click vs ignored)
+    new Chart(document.getElementById('pieChart'), {
+      type: 'pie',
+      data: {
+        labels: ['Clicked Links', 'Ignored Links'],
+        datasets: [{
+          data: [phishingStats.clickDistribution.clicked, phishingStats.clickDistribution.avoided],
+          backgroundColor: ['#ef4444', '#22c55e']
+        }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false }
+    });
+
+    // ===== Range select (label only demo) =====
+    const rangeSel = document.getElementById('rangeSelect');
+    rangeSel.addEventListener('change', ()=>{
+      // Hook here if you later want to requery/redraw by date range
+      console.log('Range changed to:', rangeSel.value);
+    });
+
+    // ===== Change password (demo with localStorage) =====
+    const form = document.getElementById('changePasswordForm');
+    form.addEventListener('submit', ()=>{
+      const current = document.getElementById('currentPass').value;
+      const next = document.getElementById('newPass').value;
+      const confirm = document.getElementById('confirmPass').value;
+      const stored = localStorage.getItem('demo_password') || 'admin123';
+
+      if(current !== stored){ alert('Current password is incorrect.'); return; }
+      if(next.length < 6){ alert('New password must be at least 6 characters.'); return; }
+      if(next !== confirm){ alert('New passwords do not match.'); return; }
+
+      localStorage.setItem('demo_password', next);
+      alert('Password updated (demo).');
+      form.reset();
+    });
+  </script>
+</body>
+</html>
